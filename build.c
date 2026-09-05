@@ -39,6 +39,7 @@ void build(C_Build *b)
     );
     c_dep_cbuild(rasterizer, "ecs-model-rasterizer", C_TARGET_SHARED_LIBRARY);
     c_dep_include(rasterizer, ".");
+    c_dep_include(rasterizer, "Sources");
     c_use(game, rasterizer);
 
     configurePlatform(game);
