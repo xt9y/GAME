@@ -1,0 +1,5 @@
+GAME-TEMPLATE for utilizing my own "game engine" as a shared library
+
+Engine: C++ ECS, model loader and rasterizer using lwcgl v2.9.3. https://github.com/xt9y/ECS-MODEL-RASTERIZER.git
+
+build --> c build run
