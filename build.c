@@ -43,7 +43,7 @@ void build(C_Build *b)
 
     configurePlatform(game);
     c_link_flag(game, "-L/usr/local/lib");
-    c_link_flag(game, "-llwcgl-2.9.3");
+    c_link_flag(game, "-llwcgl");
     c_link_flag(game, "-Wl,-rpath,/usr/local/lib");
 
     c_default_target(b, game);
