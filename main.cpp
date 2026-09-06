@@ -19,12 +19,12 @@ private:
     Renderer::Rasterizer *renderer_ = new Renderer::Rasterizer();
     Camera::Controller *camera_controller_ = new Camera::Controller();
     Ecs::World *world_ = new Ecs::World();
-    Ecs::Entity camera_ = NULL;
+    Ecs::Entity camera_ = Ecs::INVALID_ENTITY;
 
 public:
-    Example(const char* _title, const std::vector<int> _dim) 
+    Example(const char* _title, const std::vector<int> _dim)
     {
-       lwcglInstallFastRuntime();
+        lwcglInstallFastRuntime();
 
         lwcglSetContextVersion(4, 3);
         lwcglSetContextProfile(LWCGL_CONTEXT_COMPATIBILITY_PROFILE);
@@ -46,7 +46,7 @@ public:
         renderer_->init();
     }
 
-    ~Example() 
+    ~Example()
     {
         renderer_->shutdown();
         Models::clearCache();
@@ -54,28 +54,29 @@ public:
         Keyboard.destroy();
         Display.destroy();
     }
-    
+
     static inline int run(int argc, char **argv)
     {
         Example *e = new Example("Test", {1280, 720});
-        
+
         int _framebuffer_width  = std::max(Display.getWidth(),  1),
             _framebuffer_height = std::max(Display.getHeight(), 1);
 
         e->renderer_->resize(_framebuffer_width, _framebuffer_height);
 
         e->camera_ = e->world_->createEntity();
-        e->world_->addTransform(e->camera_, {
-               .position = {.x = 0.0f, .y = 1.5f, .z = 5.0f},
-               .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
-               .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
+        e->world_->add<Renderer::Transform>(e->camera_, Renderer::Transform{
+            .position = {.x = 0.0f, .y = 1.5f, .z = 5.0f},
+            .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
+            .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
         });
-
-        e->world_->addCamera(e->camera_, {60.0f, 0.1f, true});
+        e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{60.0f, 0.1f, true});
 
         std::string _error;
-
-        const Models::ModelHandle _model = Models::load((argc > 1 ? argv[1] : "Assets/Sponza/sponza.obj"), &_error);
+        const Models::ModelHandle _model = Models::load(
+            argc > 1 ? argv[1] : "Assets/Sponza/sponza.obj",
+            &_error
+        );
 
         if (_model == Models::INVALID_MODEL)
         {
@@ -103,12 +104,19 @@ public:
 
         for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            if (!Models::part(_model, i)) continue;
+            const Models::ModelPart *part = Models::part(_model, i);
+            if (!part) continue;
 
             const Ecs::Entity _entity = e->world_->createEntity();
-            e->world_->addTransform(_entity, {});
-            e->world_->addMesh(_entity, {Models::part(_model, i)->mesh, Models::part(_model, i)->material});
-            e->world_->addRenderable(_entity, {true});
+            e->world_->add<Renderer::Transform>(_entity, Renderer::Transform{});
+            e->world_->add<Renderer::MeshComponent>(
+                _entity,
+                Renderer::MeshComponent{part->mesh, part->material}
+            );
+            e->world_->add<Renderer::RenderableComponent>(
+                _entity,
+                Renderer::RenderableComponent{true}
+            );
         }
 
         using Clock = std::chrono::steady_clock;
@@ -144,6 +152,7 @@ public:
     }
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     return Example::run(argc, argv);
 }
