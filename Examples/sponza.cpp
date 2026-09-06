@@ -70,46 +70,44 @@ public:
         e->renderer_->resize(_framebuffer_width, _framebuffer_height);
 
         e->camera_ = e->world_->createEntity();
+
         e->world_->add<Renderer::Transform>(e->camera_, Renderer::Transform{
             .position = {.x = 0.0f, .y = 1.5f, .z = 5.0f},
             .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
             .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
         });
-        e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{60.0f, 0.1f, true});
+
+        e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{
+            60.0f, 0.1f, true
+        });
 
         std::string _error;
-        const std::vector<Models::ModelHandle> _models = {
-            Models::load("Assets/Sponza/sponza.obj",   &_error),
-            Models::load("Assets/Glock17/Glock17.fbx", &_error),
-        };
+        const Models::ModelHandle _model = Models::load("Assets/Sponza/sponza.obj", &_error);
 
-        for (const Models::ModelHandle _model : _models)
+        if (_model == Models::INVALID_MODEL)
         {
-            if (_model == Models::INVALID_MODEL)
-            {
-                std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
-                delete e;
-                return 3;
-            }
-
-            if (Models::partCount(_model) == 0u)
-            {
-                std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
-                delete e;
-                return 3;
-            }
+            std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
+            delete e;
+            return 3;
         }
 
-        float _min_x = std::numeric_limits<float>::infinity();
-        float _min_y = std::numeric_limits<float>::infinity();
-        float _min_z = std::numeric_limits<float>::infinity();
+        if (Models::partCount(_model) == 0u)
+        {
+            std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
+            delete e;
+            return 3;
+        }
+
+        float _min_x =  std::numeric_limits<float>::infinity();
+        float _min_y =  std::numeric_limits<float>::infinity();
+        float _min_z =  std::numeric_limits<float>::infinity();
         float _max_x = -std::numeric_limits<float>::infinity();
         float _max_y = -std::numeric_limits<float>::infinity();
         float _max_z = -std::numeric_limits<float>::infinity();
 
-        for (std::size_t i = 0; i < Models::partCount(_models[0]); ++i)
+        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            const Models::ModelPart *part = Models::part(_models[0], i);
+            const Models::ModelPart *part = Models::part(_model, i);
             if (!part) continue;
             const Models::MeshData *mesh = Models::mesh(part->mesh);
             if (!mesh) continue;
@@ -132,62 +130,44 @@ public:
         const float _scene_radius = std::max({_extent_x, _extent_y, _extent_z});
 
         const Ecs::Entity _light = e->world_->createEntity();
+
         e->world_->add<Renderer::Transform>(_light, Renderer::Transform{
             .position = {
-                .x = _valid_bounds ? (_min_x + _max_x) * 0.5f : 0.0f,
+                .x = _valid_bounds ? (_min_x + _max_x)  * 0.5f  : 0.0f,
                 .y = _valid_bounds ? _min_y + _extent_y * 0.78f : 8.0f,
-                .z = _valid_bounds ? (_min_z + _max_z) * 0.5f : 0.0f,
+                .z = _valid_bounds ? (_min_z + _max_z)  * 0.5f  : 0.0f,
             },
             .rotation = {},
             .scale = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
         });
+
         e->world_->add<Renderer::LightComponent>(_light, Renderer::LightComponent{
             .type = Renderer::LightType::Point,
             .color = {.x = 1.0f, .y = 0.96f, .z = 0.90f},
             .intensity = _scene_radius * _scene_radius * 3.0f,
         });
 
-        Ecs::Entity _animator = Ecs::INVALID_ENTITY;
-        const Animation::SkeletonHandle _skeleton = Models::skeleton(_models[1]);
-        if (_skeleton != Animation::INVALID_SKELETON && argc > 2)
+        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            const Animation::ClipHandle _clip = Models::animation(_models[1], argv[2]);
-            if (_clip != Animation::INVALID_CLIP)
-            {
-                _animator = e->world_->createEntity();
-                Animation::AnimatorComponent animator;
-                animator.skeleton = _skeleton;
-                Animation::play(animator, _clip);
-                e->world_->add<Animation::AnimatorComponent>(_animator, std::move(animator));
-            }
-        }
+            const Models::ModelPart *part = Models::part(_model, i);
+            if (!part) continue;
 
-        for (const Models::ModelHandle _model : _models)
-        {
-            for (std::size_t i = 0; i < Models::partCount(_model); ++i)
-            {
-                const Models::ModelPart *part = Models::part(_model, i);
-                if (!part) continue;
+            const Ecs::Entity _entity = e->world_->createEntity();
 
-                const Ecs::Entity _entity = e->world_->createEntity();
-                e->world_->add<Renderer::Transform>(_entity, Renderer::Transform{});
-                e->world_->add<Renderer::MeshComponent>(
-                    _entity,
-                    Renderer::MeshComponent{part->mesh, part->material}
-                );
-                e->world_->add<Renderer::RenderableComponent>(
-                    _entity,
-                    Renderer::RenderableComponent{true}
-                );
+            e->world_->add<Renderer::Transform>(
+                _entity, 
+                Renderer::Transform{}
+            );
 
-                if (_animator != Ecs::INVALID_ENTITY && _model == _models[1])
-                {
-                    e->world_->add<Animation::SkinBindingComponent>(
-                        _entity,
-                        Animation::SkinBindingComponent{_animator}
-                    );
-                }
-            }
+            e->world_->add<Renderer::MeshComponent>(
+                _entity,
+                Renderer::MeshComponent{part->mesh, part->material}
+            );
+
+            e->world_->add<Renderer::RenderableComponent>(
+                _entity,
+                Renderer::RenderableComponent{true}
+            );
         }
 
         using Clock = std::chrono::steady_clock;

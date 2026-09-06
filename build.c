@@ -22,15 +22,23 @@ static void configurePlatform(C_Target *target)
     c_link_system(target, "glfw");
 }
 
+static void configureViewer(C_Target *target, C_Dependency *rasterizer, const char *source)
+{
+    c_sources(target, source);
+    c_include(target, "/usr/local/include/lwcgl-2.9.3");
+    c_flag(target, "-std=c++20");
+    c_warnings_strict(target);
+
+    c_use(target, rasterizer);
+
+    configurePlatform(target);
+    c_link_flag(target, "-L/usr/local/lib");
+    c_link_flag(target, "-llwcgl");
+    c_link_flag(target, "-Wl,-rpath,/usr/local/lib");
+}
+
 void build(C_Build *b)
 {
-    C_Target *game = c_executable(b, "game");
-
-    c_sources(game, "main.cpp");
-    c_include(game, "/usr/local/include/lwcgl-2.9.3");
-    c_flag(game, "-std=c++20");
-    c_warnings_strict(game);
-
     C_Dependency *rasterizer = c_git(
         b,
         "ecs-model-rasterizer",
@@ -40,12 +48,12 @@ void build(C_Build *b)
     c_dep_cbuild(rasterizer, "ecs-model-rasterizer", C_TARGET_SHARED_LIBRARY);
     c_dep_include(rasterizer, ".");
     c_dep_include(rasterizer, "Sources");
-    c_use(game, rasterizer);
 
-    configurePlatform(game);
-    c_link_flag(game, "-L/usr/local/lib");
-    c_link_flag(game, "-llwcgl");
-    c_link_flag(game, "-Wl,-rpath,/usr/local/lib");
+    C_Target *sponza = c_test(b, "sponza");
+    configureViewer(sponza, rasterizer, "Examples/sponza.cpp");
 
-    c_default_target(b, game);
+    C_Target *earth = c_test(b, "earth");
+    configureViewer(earth, rasterizer, "Examples/earth.cpp");
+
+    c_default_target(b, sponza);
 }

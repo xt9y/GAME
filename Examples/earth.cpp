@@ -62,9 +62,6 @@ public:
 
     static inline int run(int argc, char **argv)
     {
-        (void)argc;
-        (void)argv;
-
         Example *e = new Example("Earth", {1280, 720});
 
         int _framebuffer_width  = std::max(Display.getWidth(),  1),
@@ -72,51 +69,55 @@ public:
 
         e->renderer_->resize(_framebuffer_width, _framebuffer_height);
 
+        e->camera_ = e->world_->createEntity();
+
+        e->world_->add<Renderer::Transform>(e->camera_, Renderer::Transform{
+            .position = {.x = 0.0f, .y = 1.5f, .z = 5.0f},
+            .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
+            .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
+        });
+
+        e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{
+            60.0f, 0.1f, true
+        });
+
         std::string _error;
-        const std::vector<Models::ModelHandle> _models = {
-            Models::load("Assets/Earth/Earth.fbx", &_error),
-        };
+        const Models::ModelHandle _model = Models::load("Assets/Earth/Earth.fbx", &_error);
 
-        for (const Models::ModelHandle _model : _models)
+        if (_model == Models::INVALID_MODEL)
         {
-            if (_model == Models::INVALID_MODEL)
-            {
-                std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
-                delete e;
-                return 3;
-            }
-
-            if (Models::partCount(_model) == 0u)
-            {
-                std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
-                delete e;
-                return 3;
-            }
+            std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
+            delete e;
+            return 3;
         }
 
-        float _min_x = std::numeric_limits<float>::infinity();
-        float _min_y = std::numeric_limits<float>::infinity();
-        float _min_z = std::numeric_limits<float>::infinity();
+        if (Models::partCount(_model) == 0u)
+        {
+            std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
+            delete e;
+            return 3;
+        }
+
+        float _min_x =  std::numeric_limits<float>::infinity();
+        float _min_y =  std::numeric_limits<float>::infinity();
+        float _min_z =  std::numeric_limits<float>::infinity();
         float _max_x = -std::numeric_limits<float>::infinity();
         float _max_y = -std::numeric_limits<float>::infinity();
         float _max_z = -std::numeric_limits<float>::infinity();
 
-        for (const Models::ModelHandle _model : _models)
+        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            for (std::size_t i = 0; i < Models::partCount(_model); ++i)
-            {
-                const Models::ModelPart *part = Models::part(_model, i);
-                if (!part) continue;
-                const Models::MeshData *mesh = Models::mesh(part->mesh);
-                if (!mesh) continue;
+            const Models::ModelPart *part = Models::part(_model, i);
+            if (!part) continue;
+            const Models::MeshData *mesh = Models::mesh(part->mesh);
+            if (!mesh) continue;
 
-                _min_x = std::min(_min_x, mesh->bounds.minimum.x);
-                _min_y = std::min(_min_y, mesh->bounds.minimum.y);
-                _min_z = std::min(_min_z, mesh->bounds.minimum.z);
-                _max_x = std::max(_max_x, mesh->bounds.maximum.x);
-                _max_y = std::max(_max_y, mesh->bounds.maximum.y);
-                _max_z = std::max(_max_z, mesh->bounds.maximum.z);
-            }
+            _min_x = std::min(_min_x, mesh->bounds.minimum.x);
+            _min_y = std::min(_min_y, mesh->bounds.minimum.y);
+            _min_z = std::min(_min_z, mesh->bounds.minimum.z);
+            _max_x = std::max(_max_x, mesh->bounds.maximum.x);
+            _max_y = std::max(_max_y, mesh->bounds.maximum.y);
+            _max_z = std::max(_max_z, mesh->bounds.maximum.z);
         }
 
         const bool _valid_bounds =
@@ -128,52 +129,45 @@ public:
         const float _extent_z = _valid_bounds ? std::max(_max_z - _min_z, 1.0f) : 20.0f;
         const float _scene_radius = std::max({_extent_x, _extent_y, _extent_z});
 
-        const float _center_x = _valid_bounds ? (_min_x + _max_x) * 0.5f : 0.0f;
-        const float _center_y = _valid_bounds ? (_min_y + _max_y) * 0.5f : 0.0f;
-        const float _center_z = _valid_bounds ? (_min_z + _max_z) * 0.5f : 0.0f;
-
-        e->camera_ = e->world_->createEntity();
-        e->world_->add<Renderer::Transform>(e->camera_, Renderer::Transform{
-            .position = {.x = _center_x, .y = _center_y, .z = _center_z + _scene_radius * 2.5f},
-            .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
-            .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
-        });
-        e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{60.0f, 0.1f, true});
-
         const Ecs::Entity _light = e->world_->createEntity();
+
         e->world_->add<Renderer::Transform>(_light, Renderer::Transform{
             .position = {
-                .x = _center_x,
+                .x = _valid_bounds ? (_min_x + _max_x)  * 0.5f  : 0.0f,
                 .y = _valid_bounds ? _min_y + _extent_y * 0.78f : 8.0f,
-                .z = _center_z,
+                .z = _valid_bounds ? (_min_z + _max_z)  * 0.5f  : 0.0f,
             },
             .rotation = {},
             .scale = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
         });
+
         e->world_->add<Renderer::LightComponent>(_light, Renderer::LightComponent{
             .type = Renderer::LightType::Point,
             .color = {.x = 1.0f, .y = 0.96f, .z = 0.90f},
             .intensity = _scene_radius * _scene_radius * 3.0f,
         });
 
-        for (const Models::ModelHandle _model : _models)
+        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            for (std::size_t i = 0; i < Models::partCount(_model); ++i)
-            {
-                const Models::ModelPart *part = Models::part(_model, i);
-                if (!part) continue;
+            const Models::ModelPart *part = Models::part(_model, i);
+            if (!part) continue;
 
-                const Ecs::Entity _entity = e->world_->createEntity();
-                e->world_->add<Renderer::Transform>(_entity, Renderer::Transform{});
-                e->world_->add<Renderer::MeshComponent>(
-                    _entity,
-                    Renderer::MeshComponent{part->mesh, part->material}
-                );
-                e->world_->add<Renderer::RenderableComponent>(
-                    _entity,
-                    Renderer::RenderableComponent{true}
-                );
-            }
+            const Ecs::Entity _entity = e->world_->createEntity();
+
+            e->world_->add<Renderer::Transform>(
+                _entity, 
+                Renderer::Transform{}
+            );
+
+            e->world_->add<Renderer::MeshComponent>(
+                _entity,
+                Renderer::MeshComponent{part->mesh, part->material}
+            );
+
+            e->world_->add<Renderer::RenderableComponent>(
+                _entity,
+                Renderer::RenderableComponent{true}
+            );
         }
 
         using Clock = std::chrono::steady_clock;
@@ -215,3 +209,4 @@ int main(int argc, char **argv)
 {
     return Example::run(argc, argv);
 }
+
