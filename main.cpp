@@ -3,6 +3,7 @@
 #include "Sources/Models/Models.hpp"
 #include "Sources/Renderer/Render.hpp"
 
+#include <lwcgl/context.h>
 #include <lwcgl/lwcgl.h>
 
 #include <algorithm>
@@ -23,6 +24,9 @@ public:
     Example(const char* _title, const std::vector<int> _dim) 
     {
        lwcglInstallFastRuntime();
+
+        lwcglSetContextVersion(4, 3);
+        lwcglSetContextProfile(LWCGL_CONTEXT_COMPATIBILITY_PROFILE);
 
         Display.setDisplayMode(new DisplayMode(_dim[0], _dim[1]));
         Display.create();
