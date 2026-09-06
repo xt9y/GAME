@@ -9,54 +9,68 @@
 #include <chrono>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 class Example
 {
+private:
+    Renderer::Rasterizer *renderer_ = new Renderer::Rasterizer();
+    Camera::Controller *camera_controller_ = new Camera::Controller();
+    Ecs::World *world_ = new Ecs::World();
+    Ecs::Entity camera_ = NULL;
+
 public:
-    static inline int run(int argc, char **argv)
+    Example(const char* _title, const std::vector<int> _dim) 
     {
-        constexpr int initial_width = 1280;
-        constexpr int initial_height = 720;
+       lwcglInstallFastRuntime();
 
-        lwcglInstallFastRuntime();
-
-        Display.setDisplayMode(new DisplayMode(initial_width, initial_height));
+        Display.setDisplayMode(new DisplayMode(_dim[0], _dim[1]));
         Display.create();
 
-        Display.setTitle("Test");
+        Display.setTitle(_title);
 
         Keyboard.create();
         Mouse.create();
 
-        Renderer::Rasterizer renderer;
-        renderer.init();
+        renderer_->init();
+    }
 
-        int framebuffer_width  = std::max(Display.getWidth(),  1),
-            framebuffer_height = std::max(Display.getHeight(), 1);
+    ~Example() 
+    {
+        renderer_->shutdown();
+        Models::clearCache();
+        Mouse.destroy();
+        Keyboard.destroy();
+        Display.destroy();
+    }
+    
+    static inline int run(int argc, char **argv)
+    {
+        Example *e = new Example("Test", {1280, 720});
+        
+        int _framebuffer_width  = std::max(Display.getWidth(),  1),
+            _framebuffer_height = std::max(Display.getHeight(), 1);
 
-        renderer.resize(framebuffer_width, framebuffer_height);
+        e->renderer_->resize(_framebuffer_width, _framebuffer_height);
 
-        Ecs::World world;
-        Camera::Controller camera_controller;
-
-        const Ecs::Entity camera = world.createEntity();
-        world.addTransform(camera, {
+        e->camera_ = e->world_->createEntity();
+        e->world_->addTransform(e->camera_, {
                .position = {.x = 0.0f, .y = 1.5f, .z = 5.0f},
                .rotation = {.x = 0.0f, .y = 0.0f, .z = 0.0f},
                .scale    = {.x = 1.0f, .y = 1.0f, .z = 1.0f},
         });
 
-        world.addCamera(camera, {60.0f, 0.1f, true});
+        e->world_->addCamera(e->camera_, {60.0f, 0.1f, true});
 
-        std::string error;
+        std::string _error;
 
-        const Models::ModelHandle model = Models::load((argc > 1 ? argv[1] : "Assets/Sponza/sponza.obj"), &error);
+        const Models::ModelHandle _model = Models::load((argc > 1 ? argv[1] : "Assets/Sponza/sponza.obj"), &_error);
 
-        if (model == Models::INVALID_MODEL)
+        if (_model == Models::INVALID_MODEL)
         {
-            std::fprintf(stderr, "[LOG]: %s\n", error.c_str());
+            std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
 
-            renderer.shutdown();
+            e->renderer_->shutdown();
             Models::clearCache();
             Mouse.destroy();
             Keyboard.destroy();
@@ -64,11 +78,11 @@ public:
             return 3;
         }
 
-        if (Models::partCount(model) == 0u)
+        if (Models::partCount(_model) == 0u)
         {
             std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
 
-            renderer.shutdown();
+            e->renderer_->shutdown();
             Models::clearCache();
             Mouse.destroy();
             Keyboard.destroy();
@@ -76,18 +90,18 @@ public:
             return 3;
         }
 
-        for (std::size_t i = 0; i < Models::partCount(model); ++i)
+        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
         {
-            if (!Models::part(model, i)) continue;
+            if (!Models::part(_model, i)) continue;
 
-            const Ecs::Entity entity = world.createEntity();
-            world.addTransform(entity, {});
-            world.addMesh(entity, {Models::part(model, i)->mesh, Models::part(model, i)->material});
-            world.addRenderable(entity, {true});
+            const Ecs::Entity _entity = e->world_->createEntity();
+            e->world_->addTransform(_entity, {});
+            e->world_->addMesh(_entity, {Models::part(_model, i)->mesh, Models::part(_model, i)->material});
+            e->world_->addRenderable(_entity, {true});
         }
 
         using Clock = std::chrono::steady_clock;
-        auto previous = Clock::now();
+        auto _previous = Clock::now();
 
         while (!Display.isCloseRequested())
         {
@@ -95,31 +109,26 @@ public:
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) break;
 
             const auto now = Clock::now();
-            const float delta_seconds = std::chrono::duration<float>(now - previous).count();
-            previous = now;
+            const float delta_seconds = std::chrono::duration<float>(now - _previous).count();
+            _previous = now;
 
-            camera_controller.update(world, std::min(delta_seconds, 0.1f));
+            e->camera_controller_->update(*e->world_, std::min(delta_seconds, 0.1f));
 
             const int width  = std::max(Display.getWidth(), 1);
             const int height = std::max(Display.getHeight(), 1);
 
-            if ((width != framebuffer_width) || height != framebuffer_height)
+            if ((width != _framebuffer_width) || height != _framebuffer_height)
             {
-                framebuffer_height = height;
-                framebuffer_width  = width;
-                renderer.resize(width, height);
+                _framebuffer_height = height;
+                _framebuffer_width  = width;
+                e->renderer_->resize(width, height);
             }
 
-            renderer.render(world);
+            e->renderer_->render(*e->world_);
             Display.updateNoMessages();
         }
 
-        renderer.shutdown();
-        Models::clearCache();
-        Mouse.destroy();
-        Keyboard.destroy();
-        Display.destroy();
-
+        delete e;
         return 0;
     }
 };
