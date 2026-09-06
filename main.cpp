@@ -97,7 +97,8 @@ public:
 		}
         
 		Ecs::Entity _animator = Ecs::INVALID_ENTITY;
-        const Animation::SkeletonHandle _skeleton = Models::skeleton(_models[1]);
+        
+		const Animation::SkeletonHandle _skeleton = Models::skeleton(_models[1]);
         if (_skeleton != Animation::INVALID_SKELETON)
         {
             _animator = e->world_->createEntity();
