@@ -33,15 +33,8 @@ public:
         lwcglSetContextProfile(LWCGL_CONTEXT_COMPATIBILITY_PROFILE);
 
         Display.setDisplayMode(new DisplayMode(_dim[0], _dim[1]));
-        if (Display.create() != 0)
-        {
-            const char *error = lwcglGetLastError();
-            std::fprintf(stderr, "[LOG]: failed to create OpenGL 4.3 compatibility context%s%s\n",
-                error ? ": " : "", error ? error : "");
-            std::exit(2);
-        }
-
-        Display.setTitle(_title);
+        Display.create();
+		Display.setTitle(_title);
 
         Keyboard.create();
         Mouse.create();
@@ -81,27 +74,30 @@ public:
         e->world_->add<Camera::CameraComponent>(e->camera_, Camera::CameraComponent{60.0f, 0.1f, true});
 
         std::string _error;
-        const Models::ModelHandle _model = Models::load(
-            argc > 1 ? argv[1] : "Assets/Sponza/sponza.obj",
-            &_error
-        );
+        const std::vector<Models::ModelHandle> _models = {
+			Models::load("Assets/Sponza/sponza.obj",   &_error),
+			Models::load("Assets/Glock17/Glock17.fbx", &_error),
+		};
+		
+		for (const Models::ModelHandle _model : _models) 
+		{
+        	if (_model == Models::INVALID_MODEL)
+        	{
+            	std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
+            	delete e;
+            	return 3;
+        	}
 
-        if (_model == Models::INVALID_MODEL)
-        {
-            std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
-            delete e;
-            return 3;
-        }
-
-        if (Models::partCount(_model) == 0u)
-        {
-            std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
-            delete e;
-            return 3;
-        }
-
-        Ecs::Entity _animator = Ecs::INVALID_ENTITY;
-        const Animation::SkeletonHandle _skeleton = Models::skeleton(_model);
+        	if (Models::partCount(_model) == 0u)
+        	{
+            	std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
+            	delete e;
+            	return 3;
+			}
+		}
+        
+		Ecs::Entity _animator = Ecs::INVALID_ENTITY;
+        const Animation::SkeletonHandle _skeleton = Models::skeleton(_models[1]);
         if (_skeleton != Animation::INVALID_SKELETON)
         {
             _animator = e->world_->createEntity();
@@ -110,40 +106,51 @@ public:
             animator.skeleton = _skeleton;
 
             Animation::ClipHandle initial_clip = Animation::INVALID_CLIP;
-            if (argc > 2) initial_clip = Models::animation(_model, argv[2]);
-            if (initial_clip == Animation::INVALID_CLIP && Models::animationCount(_model) != 0u) {
-                initial_clip = Models::animation(_model, 0u);
+            if (argc > 2) 
+				initial_clip = Models::animation(_models[1], argv[2]);
+            
+			if (initial_clip == Animation::INVALID_CLIP 
+				&& Models::animationCount(_models[1]) != 0u) {
+			
+                initial_clip = Models::animation(_models[1], 0u);
             }
-            if (initial_clip != Animation::INVALID_CLIP) {
+            
+			if (initial_clip != Animation::INVALID_CLIP) {
                 Animation::play(animator, initial_clip);
             }
 
             e->world_->add<Animation::AnimatorComponent>(_animator, std::move(animator));
         }
 
-        for (std::size_t i = 0; i < Models::partCount(_model); ++i)
-        {
-            const Models::ModelPart *part = Models::part(_model, i);
-            if (!part) continue;
+		for (const Models::ModelHandle _model : _models) 
+		{
+        	for (std::size_t i = 0; i < Models::partCount(_model); ++i)
+        	{
+            	const Models::ModelPart *part = Models::part(_model, i);
+            	if (!part) continue;
 
-            const Ecs::Entity _entity = e->world_->createEntity();
-            e->world_->add<Renderer::Transform>(_entity, Renderer::Transform{});
-            e->world_->add<Renderer::MeshComponent>(
-                _entity,
-                Renderer::MeshComponent{part->mesh, part->material}
-            );
-            e->world_->add<Renderer::RenderableComponent>(
-                _entity,
-                Renderer::RenderableComponent{true}
-            );
+            	const Ecs::Entity _entity = e->world_->createEntity();
+            	e->world_->add<Renderer::Transform>(_entity, Renderer::Transform{});
 
-            if (_animator != Ecs::INVALID_ENTITY) {
-                e->world_->add<Animation::SkinBindingComponent>(
-                    _entity,
-                    Animation::SkinBindingComponent{_animator}
-                );
-            }
-        }
+            	e->world_->add<Renderer::MeshComponent>(
+                	_entity,
+               		Renderer::MeshComponent{part->mesh, part->material}
+            	);
+
+            	e->world_->add<Renderer::RenderableComponent>(
+                	_entity,
+                	Renderer::RenderableComponent{true}
+            	);
+
+            	if (_animator != Ecs::INVALID_ENTITY) 
+				{
+            	    e->world_->add<Animation::SkinBindingComponent>(
+                    	_entity,
+                    	Animation::SkinBindingComponent{_animator}
+                	);
+            	}
+        	}
+		}
 
         using Clock = std::chrono::steady_clock;
         auto _previous = Clock::now();
