@@ -47,6 +47,9 @@ public:
     ~Example()
     {
         renderer_->shutdown();
+        delete renderer_;
+        renderer_ = nullptr;
+
         Models::clearCache();
         Mouse.destroy();
         Keyboard.destroy();
@@ -54,7 +57,6 @@ public:
 
         delete animation_system_;
         delete camera_controller_;
-        delete renderer_;
         delete world_;
     }
 
