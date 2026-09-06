@@ -1,3 +1,4 @@
+#include "Sources/Animation/Animation.hpp"
 #include "Sources/Camera.hpp"
 #include "Sources/Ecs/Ecs.hpp"
 #include "Sources/Models/Models.hpp"
@@ -18,6 +19,7 @@ class Example
 private:
     Renderer::Rasterizer *renderer_ = new Renderer::Rasterizer();
     Camera::Controller *camera_controller_ = new Camera::Controller();
+    Animation::System *animation_system_ = new Animation::System();
     Ecs::World *world_ = new Ecs::World();
     Ecs::Entity camera_ = Ecs::INVALID_ENTITY;
 
@@ -53,6 +55,11 @@ public:
         Mouse.destroy();
         Keyboard.destroy();
         Display.destroy();
+
+        delete animation_system_;
+        delete camera_controller_;
+        delete renderer_;
+        delete world_;
     }
 
     static inline int run(int argc, char **argv)
@@ -81,25 +88,36 @@ public:
         if (_model == Models::INVALID_MODEL)
         {
             std::fprintf(stderr, "[LOG]: %s\n", _error.c_str());
-
-            e->renderer_->shutdown();
-            Models::clearCache();
-            Mouse.destroy();
-            Keyboard.destroy();
-            Display.destroy();
+            delete e;
             return 3;
         }
 
         if (Models::partCount(_model) == 0u)
         {
             std::fprintf(stderr, "[LOG]: model has no renderable parts\n");
-
-            e->renderer_->shutdown();
-            Models::clearCache();
-            Mouse.destroy();
-            Keyboard.destroy();
-            Display.destroy();
+            delete e;
             return 3;
+        }
+
+        Ecs::Entity _animator = Ecs::INVALID_ENTITY;
+        const Animation::SkeletonHandle _skeleton = Models::skeleton(_model);
+        if (_skeleton != Animation::INVALID_SKELETON)
+        {
+            _animator = e->world_->createEntity();
+
+            Animation::AnimatorComponent animator;
+            animator.skeleton = _skeleton;
+
+            Animation::ClipHandle initial_clip = Animation::INVALID_CLIP;
+            if (argc > 2) initial_clip = Models::animation(_model, argv[2]);
+            if (initial_clip == Animation::INVALID_CLIP && Models::animationCount(_model) != 0u) {
+                initial_clip = Models::animation(_model, 0u);
+            }
+            if (initial_clip != Animation::INVALID_CLIP) {
+                Animation::play(animator, initial_clip);
+            }
+
+            e->world_->add<Animation::AnimatorComponent>(_animator, std::move(animator));
         }
 
         for (std::size_t i = 0; i < Models::partCount(_model); ++i)
@@ -117,6 +135,13 @@ public:
                 _entity,
                 Renderer::RenderableComponent{true}
             );
+
+            if (_animator != Ecs::INVALID_ENTITY) {
+                e->world_->add<Animation::SkinBindingComponent>(
+                    _entity,
+                    Animation::SkinBindingComponent{_animator}
+                );
+            }
         }
 
         using Clock = std::chrono::steady_clock;
@@ -130,8 +155,10 @@ public:
             const auto now = Clock::now();
             const float delta_seconds = std::chrono::duration<float>(now - _previous).count();
             _previous = now;
+            const float frame_delta = std::min(delta_seconds, 0.1f);
 
-            e->camera_controller_->update(*e->world_, std::min(delta_seconds, 0.1f));
+            e->animation_system_->update(*e->world_, frame_delta);
+            e->camera_controller_->update(*e->world_, frame_delta);
 
             const int width  = std::max(Display.getWidth(), 1);
             const int height = std::max(Display.getHeight(), 1);
