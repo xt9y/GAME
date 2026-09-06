@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -29,7 +30,13 @@ public:
         lwcglSetContextProfile(LWCGL_CONTEXT_COMPATIBILITY_PROFILE);
 
         Display.setDisplayMode(new DisplayMode(_dim[0], _dim[1]));
-        Display.create();
+        if (Display.create() != 0)
+        {
+            const char *error = lwcglGetLastError();
+            std::fprintf(stderr, "[LOG]: failed to create OpenGL 4.3 compatibility context%s%s\n",
+                error ? ": " : "", error ? error : "");
+            std::exit(2);
+        }
 
         Display.setTitle(_title);
 
